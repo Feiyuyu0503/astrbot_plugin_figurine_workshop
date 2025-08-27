@@ -1,4 +1,10 @@
 {
+    "model_name":{
+        "description": "选择图像编辑模型",
+        "type": "string",
+        "hint": "选择图像编辑模型",
+        "default": "gemini-2.5-flash-image-preview"
+    },
     "gemini_api_keys": {
         "description": "Gemini API 密钥列表 (从 Google AI Studio 获取)",
         "type": "list",
@@ -15,6 +21,16 @@
         "type": "string",
         "hint": "如果需要自定义 API 地址或使用代理，请填写完整 URL",
         "default": "https://generativelanguage.googleapis.com"
+    },
+    "request_format":{
+        "description": "按Gemini格式或Openai格式进行请求",
+        "type": "string",
+        "options": [
+            "gemini",
+            "openai"
+        ],
+        "hint": "按Gemini格式或Openai格式进行请求",
+        "default": "gemini"
     },
     "figurine_style": {
         "description": "模型化风格",
