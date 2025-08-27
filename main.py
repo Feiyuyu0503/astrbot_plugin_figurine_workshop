@@ -291,8 +291,8 @@ class LMArenaPlugin(Star):
         if "choices" in data and data["choices"]:
             for choice in data["choices"]:
                 if "message" in choice:
-                    ## 打印文本内容
-                    #content = choice["message"].get("content")
+                    # 获取文本内容
+                    content = choice["message"].get("content")
                     #if isinstance(content, str):
                     #    logger.debug("助手文本:", content)
                     # 检查是否有图片（images字段）
@@ -304,7 +304,11 @@ class LMArenaPlugin(Star):
                                 if url and url.startswith("data:image/"):
                                     # 形如 data:image/png;base64,xxxx
                                     base64_part = url.split(",", 1)[-1]
-                                    return base64.b64decode(base64_part)       
+                                    return base64.b64decode(base64_part) 
+                    # 兼容部分API直接在content里返回base64
+                    if isinstance(content, str) and content.startswith("![image](data:image/png;base64,"):
+                        base64_part = content.split(",", 1)[-1]
+                        return base64.b64decode(base64_part)
         raise Exception("未在响应中获取到图片数据")
 
     async def _with_retry(self, operation, *args, **kwargs):
@@ -331,3 +335,4 @@ class LMArenaPlugin(Star):
         if self.iwf:
             await self.iwf.terminate()
             logger.info("[ImageWorkflow] session已关闭")
+
