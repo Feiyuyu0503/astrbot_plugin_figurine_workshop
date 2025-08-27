@@ -179,27 +179,48 @@ class LMArenaPlugin(Star):
         logger.info(f"Gemini 手办化 Prompt ({self.figurine_style}): {final_prompt}")
 
         async def edit_operation(api_key):
-            model_name = "gemini-2.0-flash-preview-image-generation"
+            model_name = self.conf.get("model_name", "gemini-2.5-flash-image-preview")
+            request_format = self.conf.get("request_format", "gemini")
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-            payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": final_prompt},
-                            {
-                                "inlineData": {
-                                    "mimeType": "image/png",
-                                    "data": image_base64,
+            if request_format == "gemini":
+                payload = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"text": final_prompt},
+                                {
+                                    "inlineData": {
+                                        "mimeType": "image/png",
+                                        "data": image_base64,
+                                    }
+                                },
+                            ],
+                        }
+                    ],
+                    "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+                }
+                return await self._send_image_request(model_name, payload, api_key)
+            elif request_format == "openai":
+                payload = {
+                    "model": model_name,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": final_prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{image_base64}"
+                                    }
                                 }
-                            },
-                        ],
-                    }
-                ],
-                "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
-            }
-            return await self._send_image_request(model_name, payload, api_key)
+                            ]
+                        }
+                    ],
+                }
+                return await self._send_image_request_openai(model_name, payload, api_key)
 
         image_data = await self._with_retry(edit_operation)
         if not image_data:
@@ -246,6 +267,45 @@ class LMArenaPlugin(Star):
                     return base64.b64decode(part["inlineData"]["data"])
 
         raise Exception("操作成功，但未在响应中获取到图片数据")
+
+    async def _send_image_request_openai(self, model_name, payload, api_key):
+        base_url = self.api_base_url.strip().removesuffix("/")
+        endpoint = (
+            f"{base_url}/v1/chat/completions"
+        )
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+            }
+        async with self.iwf.session.post(
+            url=endpoint, json=payload, headers=headers
+        ) as response:
+            if response.status != 200:
+                response_text = await response.text()
+                logger.error(
+                    f"API请求失败: HTTP {response.status}, 响应: {response_text}"
+                )
+                response.raise_for_status()
+            data = await response.json()
+        # 获取消息和图片（返回与_send_image_request一致）
+        if "choices" in data and data["choices"]:
+            for choice in data["choices"]:
+                if "message" in choice:
+                    ## 打印文本内容
+                    #content = choice["message"].get("content")
+                    #if isinstance(content, str):
+                    #    logger.debug("助手文本:", content)
+                    # 检查是否有图片（images字段）
+                    images = choice["message"].get("images")
+                    if images:
+                        for img in images:
+                            if img.get("type") == "image_url":
+                                url = img["image_url"].get("url")
+                                if url and url.startswith("data:image/"):
+                                    # 形如 data:image/png;base64,xxxx
+                                    base64_part = url.split(",", 1)[-1]
+                                    return base64.b64decode(base64_part)       
+        raise Exception("未在响应中获取到图片数据")
 
     async def _with_retry(self, operation, *args, **kwargs):
         max_attempts = len(self.api_keys)
