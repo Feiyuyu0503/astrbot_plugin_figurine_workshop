@@ -48,6 +48,12 @@
         "hint": "开启后，生成的图片会保存在插件的 data 目录中",
         "default": true
     },
+    "fail_msg": {
+        "description": "当操作失败时返回的回复",
+        "type": "string",
+        "hint": "当操作失败时返回的回复",
+        "default": "所有API密钥均尝试失败"
+    },
     "prompts": {
         "description": "自定义不同风格的生成提示词",
         "type": "object",
