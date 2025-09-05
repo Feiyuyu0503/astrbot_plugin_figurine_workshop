@@ -99,9 +99,9 @@ class ImageWorkflow:
 
 @register(
     "astrbot_plugin_figurine_workshop",
-    "长安某",
+    "feiyuyu",
     "使用 Gemini API 将图片手办化",
-    "1.0.0",
+    "1.0.3",
 )
 class LMArenaPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -117,6 +117,7 @@ class LMArenaPlugin(Star):
             "api_base_url", "https://generativelanguage.googleapis.com"
         )
         self.figurine_style = self.conf.get("figurine_style", "deluxe_box")
+        self.fail_msg = self.conf.get("fail_msg", "所有API密钥均尝试失败")
         if not self.api_keys:
             logger.error("LMArenaPlugin: 未配置任何 Gemini API 密钥")
 
@@ -224,7 +225,7 @@ class LMArenaPlugin(Star):
 
         image_data = await self._with_retry(edit_operation)
         if not image_data:
-            return "所有API密钥均尝试失败"
+            return self.fail_msg
         return image_data
 
     def _get_current_key(self):
@@ -305,10 +306,22 @@ class LMArenaPlugin(Star):
                                     # 形如 data:image/png;base64,xxxx
                                     base64_part = url.split(",", 1)[-1]
                                     return base64.b64decode(base64_part) 
-                    # 兼容部分API直接在content里返回base64
-                    if isinstance(content, str) and content.startswith("![image](data:image/png;base64,"):
-                        base64_part = content.split(",", 1)[-1]
-                        return base64.b64decode(base64_part)
+                    # 从content中提取图片数据
+                    if isinstance(content, str) and '![image](' in content:
+                        # 提取markdown中的图片数据
+                        start_idx = content.find('![image](') + len('![image](')
+                        end_idx = content.find(')', start_idx)
+                        if end_idx > start_idx:
+                            image_data = content[start_idx:end_idx].strip()
+                            # 判断是base64还是URL
+                            if image_data.startswith('data:image/'):
+                                # 处理base64格式
+                                base64_part = image_data.split(',', 1)[-1]
+                                return base64.b64decode(base64_part)
+                            elif image_data.startswith('http'):
+                                # 处理URL格式
+                                return await self.iwf._download_image(image_data)
+                        
         raise Exception("未在响应中获取到图片数据")
 
     async def _with_retry(self, operation, *args, **kwargs):
@@ -335,4 +348,3 @@ class LMArenaPlugin(Star):
         if self.iwf:
             await self.iwf.terminate()
             logger.info("[ImageWorkflow] session已关闭")
-
